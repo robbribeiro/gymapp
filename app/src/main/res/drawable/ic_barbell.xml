@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    
+    <!-- Barbell bar -->
+    <path
+        android:fillColor="#000000"
+        android:pathData="M6,10 L18,10 L18,14 L6,14 Z" />
+    
+    <!-- Left weight plate -->
+    <path
+        android:fillColor="#000000"
+        android:pathData="M2,8 L6,8 L6,10 L2,10 Z" />
+    <path
+        android:fillColor="#000000"
+        android:pathData="M1,9 L2,9 L2,10 L1,10 Z" />
+    <path
+        android:fillColor="#000000"
+        android:pathData="M0,10 L1,10 L1,11 L0,11 Z" />
+    
+    <!-- Right weight plate -->
+    <path
+        android:fillColor="#000000"
+        android:pathData="M18,8 L22,8 L22,10 L18,10 Z" />
+    <path
+        android:fillColor="#000000"
+        android:pathData="M22,9 L23,9 L23,10 L22,10 Z" />
+    <path
+        android:fillColor="#000000"
+        android:pathData="M23,10 L24,10 L24,11 L23,11 Z" />
+    
+    <!-- Left weight plate bottom -->
+    <path
+        android:fillColor="#000000"
+        android:pathData="M2,14 L6,14 L6,16 L2,16 Z" />
+    <path
+        android:fillColor="#000000"
+        android:pathData="M1,14 L2,14 L2,15 L1,15 Z" />
+    <path
+        android:fillColor="#000000"
+        android:pathData="M0,13 L1,13 L1,14 L0,14 Z" />
+    
+    <!-- Right weight plate bottom -->
+    <path
+        android:fillColor="#000000"
+        android:pathData="M18,14 L22,14 L22,16 L18,16 Z" />
+    <path
+        android:fillColor="#000000"
+        android:pathData="M22,14 L23,14 L23,15 L22,15 Z" />
+    <path
+        android:fillColor="#000000"
+        android:pathData="M23,13 L24,13 L24,14 L23,14 Z" />
+</vector>
