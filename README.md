@@ -35,8 +35,6 @@ Aplicativo Android para organizar treinos de academia por semanas e dias, com re
 
 ---
 
----
-
 ## 🚀 Como configurar e executar
 
 ### Pré-requisitos
