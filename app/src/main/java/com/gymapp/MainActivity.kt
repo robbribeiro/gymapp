@@ -10,47 +10,21 @@ import androidx.compose.ui.Modifier
 import com.gymapp.ui.navigation.GymAppNavigation
 import com.gymapp.ui.theme.GymAppTheme
 import com.google.firebase.FirebaseApp
+import com.google.firebase.auth.FirebaseAuth
+
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        
-        // Inicializar Firebase
-        try {
-            // Firebase será inicializado automaticamente via google-services.json
-            // Não é necessário configuração manual
-        } catch (e: Exception) {
-            e.printStackTrace()
+
+        // Firebase é inicializado automaticamente via google-services.json
+        // Autenticação anônima feita de forma assíncrona, sem bloquear a UI
+        val auth = FirebaseAuth.getInstance()
+        if (auth.currentUser == null) {
+            auth.signInAnonymously()
+                .addOnSuccessListener { /* autenticado */ }
+                .addOnFailureListener { e -> e.printStackTrace() }
         }
-        
-        // Configurar autenticação anônima se necessário
-        try {
-            val auth = FirebaseAuth.getInstance()
-            
-            // Aguardar um pouco para o Firebase ser inicializado
-            Thread.sleep(500)
-            
-            if (auth.currentUser == null) {
-                auth.signInAnonymously()
-                    .addOnCompleteListener { task ->
-                        if (task.isSuccessful) {
-                            // Usuário anônimo autenticado com sucesso
-                        } else {
-                            task.exception?.printStackTrace()
-                        }
-                    }
-                    .addOnFailureListener { exception ->
-                        exception.printStackTrace()
-                    }
-                   } else {
-                       // Usuário já autenticado
-                   }
-                   
-                   // Não fazer pré-carregamento - dados serão carregados sob demanda
-                   
-               } catch (e: Exception) {
-                   e.printStackTrace()
-               }
-        
+
         setContent {
             GymAppTheme {
                 Surface(

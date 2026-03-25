@@ -1,161 +1,160 @@
-# GymApp - Aplicativo de Academia 🏋️‍♂️
+# GymApp
 
-Um aplicativo Android moderno para monitorar sua progressão de carga, repetições e exercícios na academia, com sincronização em nuvem via Firebase.
+Aplicativo Android para organizar treinos de academia por semanas e dias, com registro de exercícios, séries e cargas, sincronização em nuvem e acompanhamento de evolução.
 
-## 📱 Funcionalidades
+---
 
-### ✅ Implementadas
-- **Gerenciamento de Treinos**: Criar, visualizar e executar treinos organizados por semanas
-- **Biblioteca de Exercícios**: Catálogo completo com exercícios pré-definidos
-- **Cronômetro de Descanso**: Timer visual circular para intervalos entre séries
-- **Execução de Treinos**: Interface para registrar séries, peso e repetições em tempo real
-- **Sincronização Firebase**: Backup automático e sincronização de dados na nuvem
-- **Interface Moderna**: Design Material Design 3 com Jetpack Compose
-- **Navegação Intuitiva**: Bottom navigation com 3 seções principais
+## Funcionalidades
 
-### 🎯 Principais Recursos
-- **Organização por Semanas**: Treinos agrupados por semanas para melhor controle
-- **Timer Circular**: Cronômetro visual com progresso em tempo real
-- **Sincronização Automática**: Dados salvos automaticamente no Firebase
-- **Interface Responsiva**: Design adaptável para diferentes tamanhos de tela
-- **Notificações**: Sistema de notificações para o cronômetro
-- **Persistência Híbrida**: Cache local + sincronização em nuvem
+- **Semanas de treino** — crie, renomeie e apague semanas; visualize quantos treinos foram concluídos
+- **Treinos por semana** — adicione treinos a cada semana, marque como concluído, copie para outra semana
+- **Exercícios** — biblioteca de exercícios por categoria com confirmação antes de apagar
+- **Séries** — registre peso e repetições por exercício; visualize em tabela com delete individual
+- **Histórico de evolução** — veja maior carga, última carga e histórico completo por sessão de cada exercício
+- **Cronômetro** — timer com notificação persistente na barra de status com botões de pausar/continuar/parar
+- **Tema escuro** — segue automaticamente o tema do sistema
+- **Sincronização Firebase** — dados salvos e sincronizados na nuvem em tempo real
 
-## 🛠️ Tecnologias Utilizadas
+---
 
-- **Linguagem**: Kotlin
-- **UI**: Jetpack Compose + Material Design 3
-- **Arquitetura**: MVVM com Repository Pattern
-- **Backend**: Firebase (Firestore, Auth, Storage, Analytics)
-- **Navegação**: Navigation Compose
-- **Gerenciamento de Estado**: Compose State + ViewModel
-- **Serialização**: Gson
-- **Coroutines**: Para operações assíncronas
-- **Notificações**: Sistema nativo do Android
+## Tecnologias
 
-## 📦 Dependências Principais
+| Camada | Tecnologia |
+|---|---|
+| Linguagem | Kotlin |
+| UI | Jetpack Compose + Material Design 3 |
+| Arquitetura | MVVM + Repository Pattern |
+| Navegação | Navigation Compose |
+| Estado | StateFlow + ViewModel |
+| Backend | Firebase Firestore + Firebase Auth |
+| Autenticação | Firebase Anonymous Auth |
+| Serialização | Gson |
+| Async | Kotlin Coroutines |
+| Notificações | Android Notification API + BroadcastReceiver |
+| Build | Gradle (Kotlin DSL) |
 
-```kotlin
-// UI e Compose
-implementation("androidx.compose.ui:ui")
-implementation("androidx.compose.material3:material3")
-implementation("androidx.activity:activity-compose")
-implementation("androidx.navigation:navigation-compose")
+---
 
-// ViewModel e Lifecycle
-implementation("androidx.lifecycle:lifecycle-viewmodel-compose")
-implementation("androidx.lifecycle:lifecycle-runtime-ktx")
+---
 
-// Firebase BOM (gerencia versões)
-implementation(platform("com.google.firebase:firebase-bom:32.7.0"))
+## 🚀 Como configurar e executar
 
-// Firebase Services
-implementation("com.google.firebase:firebase-firestore-ktx")
-implementation("com.google.firebase:firebase-auth-ktx")
-implementation("com.google.firebase:firebase-storage-ktx")
-implementation("com.google.firebase:firebase-analytics-ktx")
+### Pré-requisitos
 
-// Coroutines para Firebase
-implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services")
+- Android Studio Hedgehog (2023.1.1) ou superior
+- JDK 17+
+- Conta no [Firebase Console](https://console.firebase.google.com)
 
-// Outros
-implementation("com.google.code.gson:gson")
-implementation("androidx.compose.material:material-icons-extended")
+### 1. Clone o repositório
+
+```bash
+git clone https://github.com/robbribeiro/gymapp.git
+cd gymapp
 ```
 
-## 🚀 Como Executar
+### 2. Configure o Firebase
 
-1. **Clone o repositório**
-2. **Abra no Android Studio** (versão Arctic Fox ou superior)
-3. **Configure o Firebase**:
-   - O arquivo `google-services.json` já está incluído
-   - O projeto está configurado para usar Firebase automaticamente
-4. **Execute o projeto** no emulador ou dispositivo físico
+O arquivo `google-services.json` **não está incluído** no repositório por conter chaves sensíveis. Você precisa criar o seu:
 
-### Requisitos
-- Android Studio Arctic Fox ou superior
-- SDK mínimo: API 24 (Android 7.0)
-- SDK alvo: API 34 (Android 14)
-- Conexão com internet (para sincronização Firebase)
+1. Acesse [console.firebase.google.com](https://console.firebase.google.com)
+2. Crie um novo projeto (ou use um existente)
+3. Adicione um app Android com o package name: `com.gymapp`
+4. Baixe o arquivo `google-services.json` gerado
+5. Coloque o arquivo em `app/google-services.json`
 
-## 📱 Telas do App
+### 3. Configure o Firebase Authentication
 
-### 💪 Treinos
-- **Lista de Semanas**: Visualização de treinos organizados por semanas
-- **Gerenciamento de Semanas**: Criar, editar e excluir semanas de treino
-- **Detalhes do Treino**: Visualizar exercícios e séries de cada treino
-- **Execução de Treinos**: Interface para registrar séries em tempo real
+No Firebase Console:
+1. Acesse **Authentication → Começar**
+2. Na aba **Sign-in method**, habilite **Anônimo**
 
-### 📚 Exercícios
-- **Biblioteca Completa**: Catálogo com exercícios pré-definidos
-- **Busca e Filtros**: Encontrar exercícios por nome ou categoria
-- **Histórico de Cargas**: Visualizar progressão de peso e repetições
+### 4. Configure o Firestore
 
-### ⏱️ Cronômetro
-- **Timer Circular**: Interface visual com progresso em tempo real
-- **Controles Intuitivos**: Play, pause e reset com botões grandes
-- **Notificações**: Alertas quando o tempo de descanso termina
-- **Design Minimalista**: Foco total no cronômetro durante o treino
+No Firebase Console:
+1. Acesse **Firestore Database → Criar banco de dados**
+2. Selecione **Modo de produção**
+3. Escolha a região (recomendado: `southamerica-east1`)
+4. Configure as regras de segurança (veja seção abaixo)
 
-## 🎨 Design
+### 5. Regras de segurança do Firestore
 
-O app utiliza Material Design 3 com:
-- Cores dinâmicas adaptáveis ao sistema
-- Componentes modernos (Cards, FABs, Navigation Bar)
-- Tipografia clara e hierárquica
-- Ícones intuitivos do Material Icons
+No Firebase Console, em **Firestore → Regras**, configure:
 
-## 🔧 Estrutura do Projeto
+```javascript
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}
+```
+
+### 6. Execute o projeto
+
+1. Abra o projeto no Android Studio
+2. Aguarde a sincronização do Gradle
+3. Crie ou selecione um emulador (API 24+) em **Tools → Device Manager**
+4. Execute com **Shift + F10** ou o botão ▶
+
+---
+
+## 🗂️ Estrutura do projeto
 
 ```
 app/src/main/java/com/gymapp/
 ├── data/
-│   ├── firebase/         # Integração com Firebase
-│   │   ├── FirebaseConfig.kt
-│   │   ├── FirebaseRepositoryOptimized.kt
-│   │   └── FirebaseCache.kt
-│   ├── persistence/      # Cache local
-│   │   ├── LocalCache.kt
-│   │   └── WorkoutPersistence.kt
-│   └── repository/       # Repository pattern
-│       ├── HybridRepository.kt
-│       └── OptimizedRepository.kt
+│   └── firebase/
+│       ├── FirebaseRepositoryOptimized.kt   # Acesso ao Firestore
+│       └── [modelos de dados]               # Exercise, Workout, Set, WorkoutWeek...
+├── service/
+│   ├── TimerNotificationService.kt          # Notificação do cronômetro
+│   └── TimerNotificationReceiver.kt         # BroadcastReceiver dos botões
 ├── ui/
-│   ├── components/       # Componentes reutilizáveis
+│   ├── components/                          # Componentes reutilizáveis
+│   │   ├── WeekCard.kt
 │   │   ├── WorkoutCard.kt
-│   │   ├── ExerciseCard.kt
-│   │   ├── RestTimer.kt
-│   │   └── WeekCard.kt
-│   ├── navigation/        # Navegação do app
-│   │   └── GymAppNavigation.kt
-│   ├── screens/          # Telas principais
-│   │   ├── workouts/     # Telas de treinos
-│   │   ├── exercises/    # Tela de exercícios
-│   │   └── timer/        # Tela do cronômetro
-│   ├── theme/            # Tema e cores
-│   │   ├── Theme.kt
+│   │   └── ExerciseCard.kt
+│   ├── navigation/
+│   │   └── GymAppNavigation.kt              # Grafo de navegação
+│   ├── screens/
+│   │   ├── workouts/                        # Telas de treinos e semanas
+│   │   ├── exercises/                       # Biblioteca + histórico de exercícios
+│   │   └── timer/                           # Cronômetro
+│   ├── theme/
+│   │   ├── Theme.kt                         # Light + Dark theme
 │   │   └── Type.kt
-│   └── viewmodel/        # ViewModels
-│       ├── UnifiedWorkoutViewModel.kt
-│       ├── TimerViewModel.kt
-│       └── WorkoutWeek.kt
-├── service/              # Serviços em background
-│   ├── TimerNotificationService.kt
-│   └── TimerNotificationReceiver.kt
-├── utils/                 # Utilitários
+│   └── viewmodel/
+│       └── UnifiedWorkoutViewModel.kt       # ViewModel principal
+├── utils/
 │   ├── LogTags.kt
 │   └── PermissionUtils.kt
-└── MainActivity.kt        # Activity principal
+└── MainActivity.kt
 ```
-## 🔥 Firebase Integration
 
-O app utiliza Firebase para:
-- **Firestore**: Armazenamento de dados de treinos e exercícios
-- **Authentication**: Autenticação anônima para identificação única
-- **Storage**: Backup de dados importantes
-- **Analytics**: Métricas de uso do aplicativo
+---
 
-### Configuração Automática
-- O projeto já está configurado com Firebase
-- Arquivo `google-services.json` incluído
-- Sincronização automática habilitada por padrão
+## 🔒 Segurança
+
+- O arquivo `google-services.json` está no `.gitignore` e **nunca deve ser commitado**
+- A autenticação é anônima — cada instalação recebe um UID único automaticamente
+- As regras do Firestore garantem que cada usuário acessa apenas seus próprios dados
+- Não há senhas ou dados pessoais armazenados
+
+---
+
+## 📋 Requisitos do sistema
+
+| Item | Versão mínima |
+|---|---|
+| Android | 7.0 (API 24) |
+| Android Studio | Hedgehog 2023.1.1 |
+| Gradle | 8.13 |
+| Kotlin | 1.9.22 |
+
+---
+
+## 📄 Licença
+
+Este projeto está sob a licença MIT. Veja o arquivo [LICENSE](LICENSE) para mais detalhes.

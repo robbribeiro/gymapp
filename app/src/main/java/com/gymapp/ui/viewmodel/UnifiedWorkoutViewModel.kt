@@ -1,9 +1,6 @@
 package com.gymapp.ui.viewmodel
 
 import android.content.Context
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.gymapp.data.firebase.FirebaseRepositoryOptimized
@@ -11,711 +8,720 @@ import com.gymapp.data.firebase.Exercise
 import com.gymapp.data.firebase.Workout
 import com.gymapp.data.firebase.Set
 import com.gymapp.data.firebase.WorkoutWeek
-import com.gymapp.data.firebase.FirebaseCache
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.util.Calendar
 
-/**
- * ViewModel unificado e otimizado que implementa carregamento sob demanda
- * conforme solicitado pelo usuário - consulta o banco apenas quando necessário
- */
 class UnifiedWorkoutViewModel(private val context: Context) : ViewModel() {
-    
-    
+
     private val firebaseRepository = FirebaseRepositoryOptimized()
-    
+
     // ========== STATE FLOWS ==========
-    
+
     private val _allExercises = MutableStateFlow<List<Exercise>>(emptyList())
     val allExercises: StateFlow<List<Exercise>> = _allExercises.asStateFlow()
-    
+
     private val _allWorkouts = MutableStateFlow<List<Workout>>(emptyList())
     val allWorkouts: StateFlow<List<Workout>> = _allWorkouts.asStateFlow()
-    
-    // Usar cache global para semanas para melhor sincronização
-    val allWorkoutWeeks: StateFlow<List<WorkoutWeek>> = FirebaseCache.workoutWeeks
-    
-    // Cache para exercícios por treino (carregado sob demanda)
+
+    // CORRIGIDO: cache local no ViewModel, sem singleton FirebaseCache
+    private val _allWorkoutWeeks = MutableStateFlow<List<WorkoutWeek>>(emptyList())
+    val allWorkoutWeeks: StateFlow<List<WorkoutWeek>> = _allWorkoutWeeks.asStateFlow()
+
     private val _workoutExercises = MutableStateFlow<Map<String, List<Exercise>>>(emptyMap())
     val workoutExercises: StateFlow<Map<String, List<Exercise>>> = _workoutExercises.asStateFlow()
-    
-    // Cache para séries por treino (carregado sob demanda)
+
     private val _workoutSets = MutableStateFlow<Map<String, List<Set>>>(emptyMap())
     val workoutSets: StateFlow<Map<String, List<Set>>> = _workoutSets.asStateFlow()
-    
-    // Estados de carregamento
-    private val _isLoading = MutableStateFlow(false)
-    val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
-    
+
+    // Cache flat de TODAS as séries — usado pela aba Exercícios
+    private val _allSets = MutableStateFlow<List<Set>>(emptyList())
+    val allSets: StateFlow<List<Set>> = _allSets.asStateFlow()
+    private var allSetsLoaded = false
+
+    // ID real da última série salva — usado para animação de highlight na UI
+    private val _lastAddedSetId = MutableStateFlow<String?>(null)
+    val lastAddedSetId: StateFlow<String?> = _lastAddedSetId.asStateFlow()
+
+    // Loading states
     private val _isLoadingExercises = MutableStateFlow(false)
     val isLoadingExercises: StateFlow<Boolean> = _isLoadingExercises.asStateFlow()
-    
+
     private val _isLoadingWorkouts = MutableStateFlow(false)
     val isLoadingWorkouts: StateFlow<Boolean> = _isLoadingWorkouts.asStateFlow()
-    
+
     private val _isLoadingWeeks = MutableStateFlow(false)
     val isLoadingWeeks: StateFlow<Boolean> = _isLoadingWeeks.asStateFlow()
-    
-    // Compatibilidade com telas antigas
+
+    // NOVO: canal de erros para exibir Snackbar na UI
+    private val _errorMessage = MutableStateFlow<String?>(null)
+    val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
+
+    // Compatibilidade com telas existentes
     val exercises: StateFlow<List<Exercise>> = _allExercises.asStateFlow()
     val workouts: StateFlow<List<Workout>> = _allWorkouts.asStateFlow()
-    val workoutWeeks: StateFlow<List<WorkoutWeek>> = FirebaseCache.workoutWeeks
-    
-    // Placeholder para dados de progresso (não implementados no novo ViewModel)
+    val workoutWeeks: StateFlow<List<WorkoutWeek>> = _allWorkoutWeeks.asStateFlow()
+
     private val _exerciseProgress = MutableStateFlow<List<com.gymapp.data.firebase.ExerciseProgressData>>(emptyList())
     val exerciseProgress: StateFlow<List<com.gymapp.data.firebase.ExerciseProgressData>> = _exerciseProgress.asStateFlow()
-    
+
     private val _weeklyProgress = MutableStateFlow<List<com.gymapp.data.firebase.WeeklyProgressData>>(emptyList())
     val weeklyProgress: StateFlow<List<com.gymapp.data.firebase.WeeklyProgressData>> = _weeklyProgress.asStateFlow()
-    
-    // Flags para controlar o que já foi carregado
+
+    // Flags de carregamento
     private var exercisesLoaded = false
     private var workoutsLoaded = false
     private var weeksLoaded = false
-    
-    // Cache local para evitar consultas repetidas
+
+    // Cache local de séries para ExercisesScreen
     private val setsCache = mutableMapOf<String, List<Set>>()
     private var lastWorkoutId = ""
-    
+
+    // ========== ERRO ==========
+
+    fun clearError() {
+        _errorMessage.value = null
+    }
+
+    private fun emitError(message: String) {
+        _errorMessage.value = message
+    }
+
     // ========== CARREGAMENTO SOB DEMANDA ==========
-    
-    /**
-     * Carrega exercícios apenas quando necessário
-     */
+
     fun loadExercisesIfNeeded() {
-        if (exercisesLoaded) {
-            return
-        }
-        
+        if (exercisesLoaded) return
         viewModelScope.launch(Dispatchers.IO) {
             withContext(Dispatchers.Main) { _isLoadingExercises.value = true }
             try {
-                val startTime = System.currentTimeMillis()
-                
                 firebaseRepository.getAllExercises().collect { exercises ->
-                    val endTime = System.currentTimeMillis()
-                    val duration = endTime - startTime
-                    
                     withContext(Dispatchers.Main) {
                         _allExercises.value = exercises
                         exercisesLoaded = true
                     }
-                    
                 }
             } catch (e: Exception) {
+                emitError("Erro ao carregar exercícios. Verifique sua conexão.")
             } finally {
-                withContext(Dispatchers.Main) {
-                    _isLoadingExercises.value = false
-                }
+                withContext(Dispatchers.Main) { _isLoadingExercises.value = false }
             }
         }
     }
-    
-    /**
-     * Carrega treinos apenas quando necessário
-     */
+
     fun loadWorkoutsIfNeeded() {
-        if (workoutsLoaded) {
-            return
-        }
-        
+        if (workoutsLoaded) return
         viewModelScope.launch(Dispatchers.IO) {
             withContext(Dispatchers.Main) { _isLoadingWorkouts.value = true }
             try {
-                val startTime = System.currentTimeMillis()
-                
                 firebaseRepository.getAllWorkouts().collect { workouts ->
-                    val endTime = System.currentTimeMillis()
-                    val duration = endTime - startTime
-                    
                     withContext(Dispatchers.Main) {
                         _allWorkouts.value = workouts
                         workoutsLoaded = true
                     }
-                    
                 }
             } catch (e: Exception) {
+                emitError("Erro ao carregar treinos. Verifique sua conexão.")
             } finally {
-                withContext(Dispatchers.Main) {
-                    _isLoadingWorkouts.value = false
-                }
+                withContext(Dispatchers.Main) { _isLoadingWorkouts.value = false }
             }
         }
     }
-    
-    /**
-     * Carrega semanas apenas quando necessário
-     */
+
     fun loadWeeksIfNeeded() {
-        if (weeksLoaded) {
-            return
-        }
-        
+        if (weeksLoaded) return
         viewModelScope.launch(Dispatchers.IO) {
             withContext(Dispatchers.Main) { _isLoadingWeeks.value = true }
             try {
-                val startTime = System.currentTimeMillis()
-                
                 firebaseRepository.getAllWorkoutWeeks().collect { weeks ->
-                    val endTime = System.currentTimeMillis()
-                    val duration = endTime - startTime
-                    
                     withContext(Dispatchers.Main) {
-                        // Atualizar cache global
-                        FirebaseCache.updateWorkoutWeeks(weeks)
+                        _allWorkoutWeeks.value = weeks
                         weeksLoaded = true
                     }
-                    
                 }
             } catch (e: Exception) {
+                emitError("Erro ao carregar semanas. Verifique sua conexão.")
             } finally {
-                withContext(Dispatchers.Main) {
-                    _isLoadingWeeks.value = false
-                }
+                withContext(Dispatchers.Main) { _isLoadingWeeks.value = false }
             }
         }
     }
-    
-    /**
-     * Força o recarregamento das semanas do Firebase (ignora cache)
-     */
+
     fun forceReloadWeeks() {
-        weeksLoaded = false // Resetar flag para forçar recarregamento
+        weeksLoaded = false
         loadWeeksIfNeeded()
     }
-    
+
     // ========== EXERCISES ==========
-    
+
     fun addExercise(exercise: Exercise) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                val startTime = System.currentTimeMillis()
-                
                 val exerciseId = firebaseRepository.addExercise(exercise)
-                val endTime = System.currentTimeMillis()
-                val duration = endTime - startTime
-                
                 if (exerciseId != null) {
-                    // Atualizar lista local imediatamente no thread principal
                     withContext(Dispatchers.Main) {
-                        val updatedExercises = _allExercises.value.toMutableList()
-                        updatedExercises.add(exercise.copy(id = exerciseId))
-                        _allExercises.value = updatedExercises
+                        _allExercises.value = _allExercises.value + exercise.copy(id = exerciseId)
                     }
-                    
                 } else {
+                    emitError("Não foi possível adicionar o exercício.")
                 }
             } catch (e: Exception) {
+                emitError("Erro ao adicionar exercício: ${e.message}")
             }
         }
     }
-    
+
     fun deleteExercise(exerciseId: String) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 val success = firebaseRepository.deleteExercise(exerciseId)
                 if (success) {
-                    // Atualizar lista local imediatamente no thread principal
                     withContext(Dispatchers.Main) {
-                        val updatedExercises = _allExercises.value.toMutableList()
-                        updatedExercises.removeAll { it.id == exerciseId }
-                        _allExercises.value = updatedExercises
+                        _allExercises.value = _allExercises.value.filter { it.id != exerciseId }
                     }
+                } else {
+                    emitError("Não foi possível apagar o exercício.")
                 }
             } catch (e: Exception) {
+                emitError("Erro ao apagar exercício: ${e.message}")
             }
         }
     }
-    
+
     // ========== WORKOUTS ==========
-    
+
     fun addWorkout(workout: Workout) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 val workoutId = firebaseRepository.addWorkout(workout)
                 if (workoutId != null) {
-                    // Atualizar lista local imediatamente no thread principal
                     withContext(Dispatchers.Main) {
-                        val updatedWorkouts = _allWorkouts.value.toMutableList()
-                        updatedWorkouts.add(workout.copy(id = workoutId))
-                        _allWorkouts.value = updatedWorkouts
+                        _allWorkouts.value = _allWorkouts.value + workout.copy(id = workoutId)
                     }
+                } else {
+                    emitError("Não foi possível criar o treino.")
                 }
             } catch (e: Exception) {
+                emitError("Erro ao criar treino: ${e.message}")
             }
         }
     }
-    
+
     suspend fun deleteWorkout(workoutId: String): Boolean {
         return try {
-            
-            // 1. Deletar todas as séries do treino
+            // Deletar séries
             val sets = _workoutSets.value[workoutId] ?: emptyList()
-            for (set in sets) {
-                try {
-                    val deleteResult = firebaseRepository.deleteSet(set.id)
-                } catch (e: Exception) {
-                }
-            }
-            
-            // 2. Deletar todos os exercícios do treino
+            sets.forEach { firebaseRepository.deleteSet(it.id) }
+
+            // Remover exercícios do treino
             val exercises = _workoutExercises.value[workoutId] ?: emptyList()
-            for (exercise in exercises) {
-                try {
-                    val removeResult = firebaseRepository.removeExerciseFromWorkout(workoutId, exercise.id)
-                } catch (e: Exception) {
+            exercises.forEach { firebaseRepository.removeExerciseFromWorkout(workoutId, it.id) }
+
+            // Remover treino de semanas
+            _allWorkoutWeeks.value.forEach { week ->
+                if (week.workouts.any { it.id == workoutId }) {
+                    firebaseRepository.removeWorkoutFromWeek(week.id, workoutId)
                 }
             }
-            
-            // 3. Remover o treino de todas as semanas
-            val weeks = FirebaseCache.workoutWeeks.value
-            for (week in weeks) {
-                val weekHasWorkout = week.workouts.any { it.id == workoutId }
-                if (weekHasWorkout) {
-                    val removeSuccess = firebaseRepository.removeWorkoutFromWeek(week.id, workoutId)
-                }
-            }
-            
-            // 4. Deletar o treino em si
+
             val success = firebaseRepository.deleteWorkout(workoutId)
-            
             if (success) {
-                // Atualizar listas locais no thread principal
                 withContext(Dispatchers.Main) {
-                    // Remover treino da lista principal
-                    val updatedWorkouts = _allWorkouts.value.toMutableList()
-                    val beforeCount = updatedWorkouts.size
-                    updatedWorkouts.removeAll { it.id == workoutId }
-                    val afterCount = updatedWorkouts.size
-                    _allWorkouts.value = updatedWorkouts
-                    
-                    // Remover exercícios do treino do cache
-                    val updatedWorkoutExercises = _workoutExercises.value.toMutableMap()
-                    updatedWorkoutExercises.remove(workoutId)
-                    _workoutExercises.value = updatedWorkoutExercises
-                    
-                    // Remover séries do treino do cache
-                    val updatedWorkoutSets = _workoutSets.value.toMutableMap()
-                    updatedWorkoutSets.remove(workoutId)
-                    _workoutSets.value = updatedWorkoutSets
-                    
-                    // Limpar cache de séries
+                    _allWorkouts.value = _allWorkouts.value.filter { it.id != workoutId }
+                    _workoutExercises.value = _workoutExercises.value.toMutableMap()
+                        .also { it.remove(workoutId) }
+                    _workoutSets.value = _workoutSets.value.toMutableMap()
+                        .also { it.remove(workoutId) }
                     setsCache.clear()
                 }
-                
-                // Invalidar cache do repositório e forçar recarregamento das semanas
                 firebaseRepository.invalidateWeeksCache()
                 forceReloadWeeks()
-                
-                true
-            } else {
-                false
             }
+            success
         } catch (e: Exception) {
             e.printStackTrace()
+            emitError("Erro ao apagar treino: ${e.message}")
             false
         }
     }
-    
-    // ========== WORKOUT EXERCISES (CARREGAMENTO SOB DEMANDA) ==========
-    
+
+    fun updateWorkout(workoutId: String, name: String, date: Long) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                firebaseRepository.updateWorkout(workoutId, name, date)
+                withContext(Dispatchers.Main) {
+                    _allWorkouts.value = _allWorkouts.value.map {
+                        if (it.id == workoutId) it.copy(name = name, date = date) else it
+                    }
+                }
+            } catch (e: Exception) {
+                emitError("Erro ao editar treino: ${e.message}")
+            }
+        }
+    }
+
+    fun toggleWorkoutCompleted(workoutId: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                // Busca o treino nas semanas (fonte principal de dados)
+                val workout = _allWorkoutWeeks.value
+                    .flatMap { it.workouts }
+                    .find { it.id == workoutId }
+                    ?: _allWorkouts.value.find { it.id == workoutId }
+                    ?: run {
+                        emitError("Treino não encontrado.")
+                        return@launch
+                    }
+
+                val newCompleted = !workout.isCompleted
+                firebaseRepository.updateWorkoutCompleted(workoutId, newCompleted)
+
+                withContext(Dispatchers.Main) {
+                    // Atualiza _allWorkoutWeeks — fonte que a UI observa
+                    _allWorkoutWeeks.value = _allWorkoutWeeks.value.map { week ->
+                        week.copy(workouts = week.workouts.map { w ->
+                            if (w.id == workoutId) w.copy(isCompleted = newCompleted) else w
+                        })
+                    }
+                    // Atualiza _allWorkouts se estiver populado
+                    if (_allWorkouts.value.isNotEmpty()) {
+                        _allWorkouts.value = _allWorkouts.value.map {
+                            if (it.id == workoutId) it.copy(isCompleted = newCompleted) else it
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                emitError("Erro ao atualizar treino: ${e.message}")
+            }
+        }
+    }
+
+    fun copyWorkoutToWeek(workoutId: String, targetWeekId: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val workout = _allWorkouts.value.find { it.id == workoutId }
+                    ?: _allWorkoutWeeks.value.flatMap { it.workouts }
+                        .find { it.id == workoutId }
+                    ?: return@launch
+
+                // Criar novo treino com mesmo nome na semana destino
+                val newWorkoutId = firebaseRepository.addWorkoutToWeek(
+                    targetWeekId,
+                    workout.name
+                ) ?: return@launch
+
+                // Copiar exercícios do treino original
+                val exercises = firebaseRepository.getExercisesByWorkout(workoutId)
+                exercises.forEach { exercise ->
+                    try {
+                        firebaseRepository.addExerciseToWorkout(newWorkoutId, exercise.id)
+                    } catch (e: Exception) { /* continua se um falhar */ }
+                }
+
+                withContext(Dispatchers.Main) {
+                    forceReloadWeeks()
+                }
+            } catch (e: Exception) {
+                emitError("Erro ao copiar treino: ${e.message}")
+            }
+        }
+    }
+
+    // Busca todas as séries de um exercício pelo nome — usado no histórico
+    fun getSetHistoryForExercise(exerciseName: String): Flow<List<Set>> = flow {
+        try {
+            firebaseRepository.getAllSets().collect { sets ->
+                emit(
+                    sets.filter { it.exerciseName == exerciseName }
+                        .sortedBy { it.createdAt }
+                )
+            }
+        } catch (e: Exception) {
+            emit(emptyList())
+        }
+    }
+
+    // ========== WORKOUT EXERCISES ==========
+
     fun loadWorkoutExercises(workoutId: String) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                val startTime = System.currentTimeMillis()
-                
                 val exercises = firebaseRepository.getExercisesByWorkout(workoutId)
-                val endTime = System.currentTimeMillis()
-                val duration = endTime - startTime
-                
-                // Atualizar UI no thread principal
                 withContext(Dispatchers.Main) {
-                    val currentMap = _workoutExercises.value.toMutableMap()
-                    currentMap[workoutId] = exercises
-                    _workoutExercises.value = currentMap
+                    _workoutExercises.value = _workoutExercises.value.toMutableMap()
+                        .also { it[workoutId] = exercises }
                 }
-                
             } catch (e: Exception) {
+                emitError("Erro ao carregar exercícios do treino.")
             }
         }
     }
-    
+
     fun addExerciseToWorkout(workoutId: String, exerciseId: String) {
         viewModelScope.launch {
             try {
-                
-                // Verificar se o treino existe no cache local
-                val workoutExists = _allWorkouts.value.any { it.id == workoutId }
-                
-                if (!workoutExists) {
-                    loadWorkoutsIfNeeded()
-                    
-                    // Aguardar um pouco para o carregamento
-                    delay(1000)
-                    
-                    val workoutExistsAfterReload = _allWorkouts.value.any { it.id == workoutId }
-                    
-                    if (!workoutExistsAfterReload) {
-                        return@launch
+                firebaseRepository.addExerciseToWorkout(workoutId, exerciseId)
+                loadWorkoutExercises(workoutId)
+                // Atualiza contador
+                withContext(Dispatchers.Main) {
+                    _allWorkouts.value = _allWorkouts.value.map {
+                        if (it.id == workoutId) it.copy(exerciseCount = it.exerciseCount + 1) else it
                     }
                 }
-                
-                // Adicionar exercício ao treino no Firebase
-                firebaseRepository.addExerciseToWorkout(workoutId, exerciseId)
-                
-                // Recarregar exercícios do treino imediatamente
-                loadWorkoutExercises(workoutId)
-                
-                // Também atualizar o contador de exercícios no treino
-                val currentWorkouts = _allWorkouts.value.toMutableList()
-                val workoutIndex = currentWorkouts.indexOfFirst { it.id == workoutId }
-                if (workoutIndex != -1) {
-                    val updatedWorkout = currentWorkouts[workoutIndex].copy(
-                        exerciseCount = currentWorkouts[workoutIndex].exerciseCount + 1
-                    )
-                    currentWorkouts[workoutIndex] = updatedWorkout
-                    _allWorkouts.value = currentWorkouts
-                }
             } catch (e: Exception) {
-                e.printStackTrace()
+                emitError("Erro ao adicionar exercício ao treino: ${e.message}")
             }
         }
     }
-    
+
     fun removeExerciseFromWorkout(workoutId: String, exerciseId: String) {
         viewModelScope.launch {
             try {
                 val success = firebaseRepository.removeExerciseFromWorkout(workoutId, exerciseId)
                 if (success) {
-                    // Recarregar exercícios do treino imediatamente
                     loadWorkoutExercises(workoutId)
-                    
-                    // Atualizar contador de exercícios no treino
-                    val currentWorkouts = _allWorkouts.value.toMutableList()
-                    val workoutIndex = currentWorkouts.indexOfFirst { it.id == workoutId }
-                    if (workoutIndex != -1) {
-                        val updatedWorkout = currentWorkouts[workoutIndex].copy(
-                            exerciseCount = maxOf(0, currentWorkouts[workoutIndex].exerciseCount - 1)
-                        )
-                        currentWorkouts[workoutIndex] = updatedWorkout
-                        _allWorkouts.value = currentWorkouts
-                    }
-                    
-                    // Limpar cache de séries
-                    setsCache.clear()
-                }
-            } catch (e: Exception) {
-            }
-        }
-    }
-    
-    fun getWorkoutExercises(workoutId: String): List<Exercise> {
-        return _workoutExercises.value[workoutId] ?: emptyList()
-    }
-    
-    // ========== SETS (CARREGAMENTO SOB DEMANDA) ==========
-    
-    fun loadWorkoutSets(workoutId: String) {
-        val cachedSets = _workoutSets.value[workoutId]
-        if (cachedSets != null && cachedSets.isNotEmpty()) {
-            return
-        }
-        
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
-                val startTime = System.currentTimeMillis()
-                
-                firebaseRepository.getSetsByWorkout(workoutId).collect { sets ->
-                    val endTime = System.currentTimeMillis()
-                    val duration = endTime - startTime
-                    
                     withContext(Dispatchers.Main) {
-                        val currentMap = _workoutSets.value.toMutableMap()
-                        currentMap[workoutId] = sets
-                        _workoutSets.value = currentMap
-                        
-                        // Limpar cache quando as séries são atualizadas
+                        _allWorkouts.value = _allWorkouts.value.map {
+                            if (it.id == workoutId) it.copy(
+                                exerciseCount = maxOf(0, it.exerciseCount - 1)
+                            ) else it
+                        }
                         setsCache.clear()
                     }
-                    
+                } else {
+                    emitError("Não foi possível remover o exercício.")
                 }
             } catch (e: Exception) {
+                emitError("Erro ao remover exercício: ${e.message}")
             }
         }
     }
-    
+
+    fun getWorkoutExercises(workoutId: String): List<Exercise> =
+        _workoutExercises.value[workoutId] ?: emptyList()
+
+    // ========== SETS ==========
+
+    // CORRIGIDO: sempre recarrega (sem guard de cache que impedia atualização)
+    fun loadWorkoutSets(workoutId: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                firebaseRepository.getSetsByWorkout(workoutId).collect { sets ->
+                    withContext(Dispatchers.Main) {
+                        _workoutSets.value = _workoutSets.value.toMutableMap()
+                            .also { it[workoutId] = sets }
+                        setsCache.clear()
+                    }
+                }
+            } catch (e: Exception) {
+                emitError("Erro ao carregar séries.")
+            }
+        }
+    }
+
     fun addSet(set: Set) {
         viewModelScope.launch {
             try {
                 val setId = firebaseRepository.addSet(set)
                 if (setId != null) {
-                    // Atualizar UI imediatamente
-                    val currentSets = getWorkoutSets(set.workoutId).toMutableList()
                     val newSet = set.copy(id = setId)
-                    currentSets.add(newSet)
-                    
-                    val currentMap = _workoutSets.value.toMutableMap()
-                    currentMap[set.workoutId] = currentSets
-                    _workoutSets.value = currentMap
-                    
+                    withContext(Dispatchers.Main) {
+                        // Atualiza _workoutSets (usado na tela de detalhes do treino)
+                        val current = (_workoutSets.value[set.workoutId] ?: emptyList()).toMutableList()
+                        current.add(newSet)
+                        _workoutSets.value = _workoutSets.value.toMutableMap()
+                            .also { it[set.workoutId] = current }
+                        // Atualiza _allSets imediatamente — reflete na aba Exercícios sem recarregar
+                        addSetToAllSetsCache(newSet)
+                        // Emite o ID real para a UI acionar a animação de highlight
+                        _lastAddedSetId.value = setId
+                    }
+                } else {
+                    emitError("Não foi possível adicionar a série.")
                 }
             } catch (e: Exception) {
+                emitError("Erro ao adicionar série: ${e.message}")
             }
         }
     }
-    
+
+    fun clearLastAddedSetId() {
+        _lastAddedSetId.value = null
+    }
+
     fun addSetToExercise(workoutId: String, exerciseId: String, weight: Double, reps: Int) {
         viewModelScope.launch {
             try {
                 firebaseRepository.addSetToExercise(workoutId, exerciseId, weight, reps)
-                
-                // Recarregar séries do treino
                 loadWorkoutSets(workoutId)
             } catch (e: Exception) {
+                emitError("Erro ao adicionar série: ${e.message}")
             }
         }
     }
-    
+
     fun deleteSet(setId: String, workoutId: String) {
         viewModelScope.launch {
             try {
                 val success = firebaseRepository.deleteSet(setId)
                 if (success) {
-                    // Atualizar UI imediatamente
-                    val currentSets = getWorkoutSets(workoutId).toMutableList()
-                    currentSets.removeAll { it.id == setId }
-                    
-                    val currentMap = _workoutSets.value.toMutableMap()
-                    currentMap[workoutId] = currentSets
-                    _workoutSets.value = currentMap
-                    
+                    withContext(Dispatchers.Main) {
+                        val current = (_workoutSets.value[workoutId] ?: emptyList())
+                            .filter { it.id != setId }
+                        _workoutSets.value = _workoutSets.value.toMutableMap()
+                            .also { it[workoutId] = current }
+                        setsCache.clear()
+                    }
+                } else {
+                    // Recarrega para garantir consistência
+                    loadWorkoutSets(workoutId)
+                    emitError("Não foi possível apagar a série.")
                 }
             } catch (e: Exception) {
+                loadWorkoutSets(workoutId)
+                emitError("Erro ao apagar série: ${e.message}")
             }
         }
     }
-    
-    fun getWorkoutSets(workoutId: String): List<Set> {
-        return _workoutSets.value[workoutId] ?: emptyList()
-    }
-    
+
+    fun getWorkoutSets(workoutId: String): List<Set> =
+        _workoutSets.value[workoutId] ?: emptyList()
+
     fun getSetsByExercise(workoutId: String, exerciseName: String): List<Set> {
-        // Se mudou o workoutId, limpar cache
         if (lastWorkoutId != workoutId) {
             setsCache.clear()
             lastWorkoutId = workoutId
         }
-        
-        // Verificar se já temos as séries em cache
         val cacheKey = "$workoutId-$exerciseName"
-        if (setsCache.containsKey(cacheKey)) {
-            return setsCache[cacheKey] ?: emptyList()
+        return setsCache.getOrPut(cacheKey) {
+            (_workoutSets.value[workoutId] ?: emptyList())
+                .filter { it.exerciseName == exerciseName }
+                .sortedBy { it.createdAt }
         }
-        
-        val allSets = getWorkoutSets(workoutId)
-        val filteredSets = allSets.filter { it.exerciseName == exerciseName }
-            .sortedBy { it.createdAt }
-        
-        // Armazenar no cache
-        setsCache[cacheKey] = filteredSets
-        
-        return filteredSets
     }
-    
-    /**
-     * Obtém as últimas séries de um exercício específico (últimas 3)
-     */
+
     fun getLastSetsForExercise(exerciseName: String): List<Set> {
-        // Se não temos séries carregadas, carregar todas as séries primeiro
-        if (_workoutSets.value.isEmpty()) {
-            loadAllWorkoutSets()
-        }
-        
-        // Buscar todas as séries de todos os treinos para este exercício
-        val allSets = _workoutSets.value.values.flatten()
+        return _allSets.value
             .filter { it.exerciseName == exerciseName }
-            .sortedBy { it.createdAt } // Ordenar por data crescente (ordem de criação)
-            .takeLast(3) // Pegar as 3 mais recentes mantendo a ordem de criação
-        
-        return allSets
+            .sortedBy { it.createdAt }
+            .takeLast(3)
     }
-    
+
     /**
-     * Carrega séries de todos os treinos para exibição nos cards de exercícios
+     * Carrega TODAS as séries do usuário em uma única query no Firestore.
+     * Chamado automaticamente pela aba Exercícios ao abrir.
+     * Evita o problema de séries não aparecerem após reiniciar o app.
      */
     fun loadAllWorkoutSets() {
+        // Sem guard: sempre carrega do Firebase ao abrir a aba Exercícios.
+        // Atualizações em tempo real são feitas por addSetToAllSetsCache.
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                // Carregar séries de todos os treinos
-                val workouts = _allWorkouts.value
-                workouts.forEach { workout ->
-                    loadWorkoutSets(workout.id)
-                }
-            } catch (e: Exception) {
-            }
-        }
-    }
-    
-    // ========== WORKOUT WEEKS ==========
-    
-    fun addWorkoutWeek(weekName: String) {
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
-                val calendar = java.util.Calendar.getInstance()
-                val weekStart = calendar.apply {
-                    set(java.util.Calendar.DAY_OF_WEEK, java.util.Calendar.MONDAY)
-                    set(java.util.Calendar.HOUR_OF_DAY, 0)
-                    set(java.util.Calendar.MINUTE, 0)
-                    set(java.util.Calendar.SECOND, 0)
-                    set(java.util.Calendar.MILLISECOND, 0)
-                }.time
-
-                val weekEnd = java.util.Calendar.getInstance().apply {
-                    time = weekStart
-                    add(java.util.Calendar.DAY_OF_WEEK, 6)
-                    set(java.util.Calendar.HOUR_OF_DAY, 23)
-                    set(java.util.Calendar.MINUTE, 59)
-                    set(java.util.Calendar.SECOND, 59)
-                    set(java.util.Calendar.MILLISECOND, 999)
-                }.time
-
-                val week = WorkoutWeek(
-                    weekStart = weekStart,
-                    weekEnd = weekEnd,
-                    weekName = weekName,
-                    workouts = emptyList(),
-                    totalVolume = 0.0,
-                    userId = "",
-                    createdAt = System.currentTimeMillis()
-                )
-
-                val weekId = firebaseRepository.addWorkoutWeek(week)
-                if (weekId != null) {
-                    // Atualizar cache global imediatamente no thread principal
+                firebaseRepository.getAllSets().collect { sets ->
                     withContext(Dispatchers.Main) {
-                        val updatedWeeks = FirebaseCache.workoutWeeks.value.toMutableList()
-                        updatedWeeks.add(week.copy(id = weekId))
-                        FirebaseCache.updateWorkoutWeeks(updatedWeeks)
+                        _allSets.value = sets
+                        // Também popula _workoutSets por workoutId para manter compatibilidade
+                        val byWorkout = sets.groupBy { it.workoutId }
+                        _workoutSets.value = _workoutSets.value.toMutableMap().also {
+                            it.putAll(byWorkout)
+                        }
+                        allSetsLoaded = true
+                        setsCache.clear()
                     }
                 }
             } catch (e: Exception) {
+                emitError("Erro ao carregar séries: ${e.message}")
             }
         }
     }
-    
+
+    /**
+     * Chamado após adicionar uma série para atualizar _allSets imediatamente,
+     * sem precisar recarregar do Firebase.
+     */
+    private fun addSetToAllSetsCache(set: Set) {
+        _allSets.value = _allSets.value + set
+        setsCache.clear()
+    }
+
+    // ========== WORKOUT WEEKS ==========
+
+    fun addWorkoutWeek(weekName: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val calendar = Calendar.getInstance()
+                val weekStart = calendar.apply {
+                    set(Calendar.DAY_OF_WEEK, Calendar.MONDAY)
+                    set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0)
+                    set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+                }.time
+                val weekEnd = Calendar.getInstance().apply {
+                    time = weekStart
+                    add(Calendar.DAY_OF_WEEK, 6)
+                    set(Calendar.HOUR_OF_DAY, 23); set(Calendar.MINUTE, 59)
+                    set(Calendar.SECOND, 59); set(Calendar.MILLISECOND, 999)
+                }.time
+
+                val week = WorkoutWeek(
+                    weekStart = weekStart, weekEnd = weekEnd,
+                    weekName = weekName, workouts = emptyList(),
+                    createdAt = System.currentTimeMillis()
+                )
+                val weekId = firebaseRepository.addWorkoutWeek(week)
+                if (weekId != null) {
+                    withContext(Dispatchers.Main) {
+                        _allWorkoutWeeks.value = _allWorkoutWeeks.value + week.copy(id = weekId)
+                    }
+                } else {
+                    emitError("Não foi possível criar a semana.")
+                }
+            } catch (e: Exception) {
+                emitError("Erro ao criar semana: ${e.message}")
+            }
+        }
+    }
+
+    fun renameWeek(weekId: String, newName: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                firebaseRepository.renameWeek(weekId, newName)
+                withContext(Dispatchers.Main) {
+                    _allWorkoutWeeks.value = _allWorkoutWeeks.value.map {
+                        if (it.id == weekId) it.copy(weekName = newName) else it
+                    }
+                }
+            } catch (e: Exception) {
+                emitError("Erro ao renomear semana: ${e.message}")
+            }
+        }
+    }
+
     fun deleteWorkoutWeek(weekId: String) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 val success = firebaseRepository.deleteWorkoutWeek(weekId)
                 if (success) {
-                    // Atualizar cache global imediatamente no thread principal
                     withContext(Dispatchers.Main) {
-                        val updatedWeeks = FirebaseCache.workoutWeeks.value.toMutableList()
-                        updatedWeeks.removeAll { it.id == weekId }
-                        FirebaseCache.updateWorkoutWeeks(updatedWeeks)
+                        _allWorkoutWeeks.value = _allWorkoutWeeks.value.filter { it.id != weekId }
                     }
+                } else {
+                    emitError("Não foi possível apagar a semana.")
                 }
             } catch (e: Exception) {
+                emitError("Erro ao apagar semana: ${e.message}")
             }
         }
     }
-    
+
     fun addWorkoutToWeek(weekId: String, workoutName: String) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 val workoutId = firebaseRepository.addWorkoutToWeek(weekId, workoutName)
                 if (workoutId != null) {
-                    // Forçar recarregamento das semanas para atualizar a UI
                     forceReloadWeeks()
+                } else {
+                    emitError("Não foi possível adicionar o treino à semana.")
                 }
             } catch (e: Exception) {
+                emitError("Erro ao adicionar treino: ${e.message}")
             }
         }
     }
-    
+
+    // ========== DELETAR SEMANA COMPLETA (cascata) ==========
+
+    fun deleteFullWeek(weekId: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val week = _allWorkoutWeeks.value.find { it.id == weekId }
+                val workoutsInWeek = week?.workouts ?: emptyList()
+
+                // Deletar cada treino e seus dados
+                for (workout in workoutsInWeek) {
+                    if (workout.id.isBlank()) continue
+                    val workoutId = workout.id
+
+                    // Séries
+                    (_workoutSets.value[workoutId] ?: emptyList()).forEach {
+                        try { firebaseRepository.deleteSet(it.id) } catch (e: Exception) { }
+                    }
+
+                    // Exercícios do treino
+                    try {
+                        firebaseRepository.getExercisesByWorkout(workoutId).forEach {
+                            firebaseRepository.removeExerciseFromWorkout(workoutId, it.id)
+                        }
+                    } catch (e: Exception) { }
+
+                    // Treino
+                    try { firebaseRepository.deleteWorkout(workoutId) } catch (e: Exception) { }
+                }
+
+                // Deletar a semana
+                val success = firebaseRepository.deleteWorkoutWeek(weekId)
+                if (success) {
+                    val workoutIds = workoutsInWeek.map { it.id }.toSet()
+                    withContext(Dispatchers.Main) {
+                        _allWorkoutWeeks.value = _allWorkoutWeeks.value.filter { it.id != weekId }
+                        _allWorkouts.value = _allWorkouts.value.filter { it.id !in workoutIds }
+                        _workoutExercises.value = _workoutExercises.value.toMutableMap()
+                            .also { map -> workoutIds.forEach { map.remove(it) } }
+                        _workoutSets.value = _workoutSets.value.toMutableMap()
+                            .also { map -> workoutIds.forEach { map.remove(it) } }
+                        setsCache.clear()
+                    }
+                } else {
+                    emitError("Não foi possível apagar a semana.")
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                emitError("Erro ao apagar semana: ${e.message}")
+            }
+        }
+    }
+
     fun deleteWorkoutFromWeek(weekId: String, workoutId: String) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                
-                // Deletar o treino e todos os seus dados associados
                 val success = deleteWorkout(workoutId)
-                
-                if (success) {
-                    // Forçar recarregamento das semanas para atualizar a UI
-                    forceReloadWeeks()
-                    
-                } else {
-                }
+                if (success) forceReloadWeeks()
+                else emitError("Não foi possível apagar o treino.")
             } catch (e: Exception) {
+                emitError("Erro ao apagar treino da semana: ${e.message}")
             }
         }
     }
-    
-    // ========== COMPATIBILIDADE COM TELAS ANTIGAS ==========
-    
-    fun getExercisesByWorkout(workoutId: String): kotlinx.coroutines.flow.Flow<List<Exercise>> {
-        return kotlinx.coroutines.flow.flow {
-            val exercises = firebaseRepository.getExercisesByWorkout(workoutId)
-            emit(exercises)
-        }
+
+    // ========== COMPATIBILIDADE ==========
+
+    fun getExercisesByWorkout(workoutId: String): Flow<List<Exercise>> = flow {
+        emit(firebaseRepository.getExercisesByWorkout(workoutId))
     }
-    
-    fun updateWorkout(workoutId: String, name: String, date: Long) {
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
-                firebaseRepository.updateWorkout(workoutId, name, date)
-                // Atualizar cache local se necessário no thread principal
-                withContext(Dispatchers.Main) {
-                    val updatedWorkouts = _allWorkouts.value.toMutableList()
-                    val index = updatedWorkouts.indexOfFirst { it.id == workoutId }
-                    if (index != -1) {
-                        updatedWorkouts[index] = updatedWorkouts[index].copy(name = name, date = date)
-                        _allWorkouts.value = updatedWorkouts
-                    }
-                }
-            } catch (e: Exception) {
-            }
-        }
-    }
-    
-    // ========== UTILITY METHODS ==========
-    
-    /**
-     * Força o recarregamento de todos os dados (apenas quando necessário)
-     */
+
     fun forceRefreshAll() {
         exercisesLoaded = false
         workoutsLoaded = false
         weeksLoaded = false
-        
         loadExercisesIfNeeded()
         loadWorkoutsIfNeeded()
         loadWeeksIfNeeded()
     }
-    
-    /**
-     * Mostra resumo do estado atual do cache
-     */
-    fun showCacheStatus() {
-    }
-    
-    /**
-     * Limpa todos os caches
-     */
+
     fun clearAllCaches() {
         _allExercises.value = emptyList()
         _allWorkouts.value = emptyList()
+        _allWorkoutWeeks.value = emptyList()
         _workoutExercises.value = emptyMap()
         _workoutSets.value = emptyMap()
         setsCache.clear()
-        
         exercisesLoaded = false
         workoutsLoaded = false
         weeksLoaded = false
+        allSetsLoaded = false
     }
 }

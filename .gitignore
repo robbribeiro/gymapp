@@ -1,40 +1,93 @@
-# Gradle
+# ========================
+# SEGURANÇA — NUNCA COMMITAR
+# ========================
+
+# Firebase — contém API keys e configurações do projeto
+google-services.json
+
+# Keystore de assinatura do app
+*.jks
+*.keystore
+*.p12
+
+# Variáveis de ambiente e segredos
+*.env
+secrets.properties
+local.secrets
+
+# ========================
+# ANDROID / GRADLE
+# ========================
+
+# Diretórios de build
 .gradle/
 build/
-gradle-app.setting
-!gradle-wrapper.jar
-!gradle-wrapper.properties
+**/build/
 
-# Android Studio
+# Arquivos de configuração local do Gradle
+gradle-app.setting
+gradle.properties.local
+local.properties
+
+# Wrapper jar (manter o .properties)
+!gradle/wrapper/gradle-wrapper.jar
+!gradle/wrapper/gradle-wrapper.properties
+
+# External native build
+.externalNativeBuild
+.cxx/
+
+# ========================
+# ANDROID STUDIO / INTELLIJ
+# ========================
+
+# Configurações da IDE (específicas por desenvolvedor)
 .idea/
 *.iml
 *.ipr
 *.iws
-local.properties
 
-# OS
+# Arquivos de módulo gerados
+*.class
+
+# ========================
+# SISTEMA OPERACIONAL
+# ========================
+
+# macOS
 .DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Windows
 Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+Desktop.ini
 
-# Logs
+# Linux
+*~
+
+# ========================
+# LOGS E TEMPORÁRIOS
+# ========================
+
 *.log
-
-# Temporary files
 *.tmp
 *.temp
+*.bak
+*.swp
 
-# Firebase
-# google-services.json - NECESSÁRIO para compilação
+# ========================
+# OUTROS
+# ========================
 
-# Keystore files
-*.jks
-*.keystore
+# Captures folder (Android Studio)
+captures/
 
-# External native build folder generated in Android Studio 2.2 and later
-.externalNativeBuild
-
-# Google Services (e.g. APIs or Firebase)
-google-services.json
+# Lint reports
+lint/
 
 # Freeline
 freeline.py
@@ -50,5 +103,5 @@ fastlane/test_output
 # Bundle artifacts
 *.jsbundle
 
-# CocoaPods
+# CocoaPods (caso haja módulos iOS futuramente)
 /ios/Pods/

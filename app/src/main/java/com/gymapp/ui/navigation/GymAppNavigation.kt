@@ -11,7 +11,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.collectAsState
-import androidx.navigation.NavController
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
@@ -23,6 +22,7 @@ import com.gymapp.ui.screens.workouts.WorkoutsScreen
 import com.gymapp.ui.screens.workouts.WorkoutDetailScreen
 import com.gymapp.ui.screens.workouts.WeekWorkoutsScreen
 import com.gymapp.ui.screens.timer.TimerScreen
+import com.gymapp.ui.screens.exercises.ExerciseHistoryScreen
 import com.gymapp.ui.viewmodel.WorkoutWeek
 import com.gymapp.ui.viewmodel.UnifiedWorkoutViewModel
 import androidx.compose.ui.platform.LocalContext
@@ -41,56 +41,43 @@ fun GymAppNavigation() {
     val navController = rememberNavController()
     val context = LocalContext.current
     val workoutViewModel = remember { UnifiedWorkoutViewModel(context) }
-    val items = listOf(
-        Screen.Workouts,
-        Screen.Exercises,
-        Screen.Timer
-    )
+    val items = listOf(Screen.Workouts, Screen.Exercises, Screen.Timer)
 
     GymAppTheme {
         Scaffold(
             bottomBar = {
                 NavigationBar(
-                    containerColor = androidx.compose.ui.graphics.Color.White
+                    containerColor = MaterialTheme.colorScheme.surface
                 ) {
                     val navBackStackEntry by navController.currentBackStackEntryAsState()
                     val currentDestination = navBackStackEntry?.destination
 
                     items.forEach { screen ->
+                        val isSelected = currentDestination?.hierarchy
+                            ?.any { it.route == screen.route } == true
+
                         NavigationBarItem(
                             icon = {
                                 Icon(
                                     screen.icon,
-                                    contentDescription = screen.title,
-                                    tint = if (currentDestination?.hierarchy?.any { it.route == screen.route } == true)
-                                        androidx.compose.ui.graphics.Color.Black
-                                    else
-                                        androidx.compose.ui.graphics.Color.Gray
+                                    contentDescription = screen.title
                                 )
                             },
                             label = {
-                                Text(
-                                    screen.title,
-                                    color = if (currentDestination?.hierarchy?.any { it.route == screen.route } == true)
-                                        androidx.compose.ui.graphics.Color.Black
-                                    else
-                                        androidx.compose.ui.graphics.Color.Gray
-                                )
+                                Text(screen.title)
                             },
-                            selected = currentDestination?.hierarchy?.any { it.route == screen.route } == true,
+                            selected = isSelected,
                             colors = NavigationBarItemDefaults.colors(
-                                selectedIconColor = androidx.compose.ui.graphics.Color.Black,
-                                selectedTextColor = androidx.compose.ui.graphics.Color.Black,
-                                unselectedIconColor = androidx.compose.ui.graphics.Color.Gray,
-                                unselectedTextColor = androidx.compose.ui.graphics.Color.Gray,
-                                indicatorColor = androidx.compose.ui.graphics.Color.LightGray
+                                selectedIconColor = MaterialTheme.colorScheme.onSurface,
+                                selectedTextColor = MaterialTheme.colorScheme.onSurface,
+                                unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                indicatorColor = MaterialTheme.colorScheme.surfaceVariant
                             ),
                             onClick = {
                                 if (currentDestination?.route != screen.route) {
                                     navController.navigate(screen.route) {
-                                        popUpTo(0) {
-                                            inclusive = false
-                                        }
+                                        popUpTo(0) { inclusive = false }
                                         launchSingleTop = true
                                     }
                                 }
@@ -105,54 +92,61 @@ fun GymAppNavigation() {
                 startDestination = Screen.Workouts.route,
                 modifier = Modifier.padding(innerPadding)
             ) {
-                composable(Screen.Workouts.route) { 
-                    WorkoutsScreen(navController, workoutViewModel) 
+                composable(Screen.Workouts.route) {
+                    WorkoutsScreen(navController, workoutViewModel)
                 }
-                composable(Screen.Exercises.route) { 
-                    ExercisesScreen(navController, workoutViewModel) 
+                composable(Screen.Exercises.route) {
+                    ExercisesScreen(navController, workoutViewModel)
                 }
-                composable(Screen.Timer.route) { 
-                    TimerScreen() 
+                composable(Screen.Timer.route) {
+                    TimerScreen()
                 }
                 composable("workout_detail/{workoutId}") { backStackEntry ->
-                    val workoutId = backStackEntry.arguments?.getString("workoutId") ?: return@composable
+                    val workoutId = backStackEntry.arguments?.getString("workoutId")
+                        ?: return@composable
                     WorkoutDetailScreen(navController, workoutId, workoutViewModel)
+                }
+                composable("exercise_history/{exerciseName}") { backStackEntry ->
+                    val exerciseName = backStackEntry.arguments?.getString("exerciseName")
+                        ?: return@composable
+                    ExerciseHistoryScreen(navController, exerciseName, workoutViewModel)
                 }
                 composable("week_workouts/{weekId}") { backStackEntry ->
                     val weekId = backStackEntry.arguments?.getString("weekId")
-                    if (weekId != null) {
-                        val weeks by workoutViewModel.allWorkoutWeeks.collectAsState()
-                        val week = weeks.find { it.id == weekId }
-                        
-                        
-                        week?.let { weekData ->
-                            val workoutWeek = com.gymapp.ui.viewmodel.WorkoutWeek(
-                                id = weekData.id,
-                                weekStart = weekData.weekStart,
-                                weekEnd = weekData.weekEnd,
-                                weekName = weekData.weekName,
-                                workouts = weekData.workouts.map { workout ->
-                                    com.gymapp.ui.viewmodel.WorkoutItem(
-                                        id = workout.id.hashCode().toLong(), // Manter para compatibilidade com UI
-                                        name = workout.name,
-                                        date = Date(workout.date),
-                                        exerciseCount = workout.exerciseCount,
-                                        duration = workout.duration.toString(),
-                                        isCompleted = workout.isCompleted,
-                                        exercises = emptyList(),
-                                        firebaseId = workout.id // Usar o ID do workout (que deve ser o ID do documento)
-                                    )
-                                },
-                                totalVolume = weekData.totalVolume
-                            )
-                            WeekWorkoutsScreen(navController, workoutWeek, workoutViewModel)
-                        } ?: run {
-                            // Handle case where week is not found
-                            Text("Semana não encontrada", modifier = Modifier.padding(16.dp))
-                        }
-                    } else {
-                        // Handle invalid weekId argument
-                        Text("ID da semana inválido", modifier = Modifier.padding(16.dp))
+                        ?: return@composable
+
+                    // CORRIGIDO: collectAsState aqui garante recomposição quando
+                    // _allWorkoutWeeks muda (ex: toggle completed, rename, add workout)
+                    val weeks by workoutViewModel.allWorkoutWeeks.collectAsState()
+                    val weekData = weeks.find { it.id == weekId }
+
+                    weekData?.let {
+                        // Mapeia para WorkoutWeek da UI — reconstruído a cada mudança no StateFlow
+                        val workoutWeek = WorkoutWeek(
+                            id = it.id,
+                            weekStart = it.weekStart,
+                            weekEnd = it.weekEnd,
+                            weekName = it.weekName,
+                            workouts = it.workouts.map { workout ->
+                                com.gymapp.ui.viewmodel.WorkoutItem(
+                                    id = workout.id.hashCode().toLong(),
+                                    name = workout.name,
+                                    date = Date(workout.date),
+                                    exerciseCount = workout.exerciseCount,
+                                    duration = workout.duration.toString(),
+                                    isCompleted = workout.isCompleted,
+                                    exercises = emptyList(),
+                                    firebaseId = workout.id
+                                )
+                            },
+                            totalVolume = it.totalVolume
+                        )
+                        WeekWorkoutsScreen(navController, workoutWeek, workoutViewModel)
+                    } ?: run {
+                        Text(
+                            "Semana não encontrada",
+                            modifier = Modifier.padding(16.dp)
+                        )
                     }
                 }
             }
