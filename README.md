@@ -23,6 +23,8 @@ Aplicativo Android para organizar treinos de academia por semanas e dias, com re
 | :---: | :---: | :---: |
 | <img src="img/treinos.png" width="250"/> | <img src="img/exercicios.png" width="250"/> | <img src="img/cronometro.png" width="250"/> |
 | Controle suas semanas e dias de treino de forma fácil. Acompanhe seu progresso semanal. | Biblioteca organizada por categorias com histórico detalhado da evolução de cargas. | Timer de descanso prático, com botões de ação e notificações persistentes. |
+| <img src="img/treinosnasemana.png" width="250"/> | <img src="img/treinosnasemanaconcluidos.png" width="250"/> | <img src="img/exerciciosdentrodotreino.png" width="250"/> |
+| Visualize todos os seus treinos planejados para a semana atual em uma lista clara. | Acompanhe quais treinos já foram finalizados com marcações visuais de conclusão. | Gerencie séries, repetições e cargas diretamente na tela de execução do treino. |
 
 ---
 
@@ -44,7 +46,7 @@ Aplicativo Android para organizar treinos de academia por semanas e dias, com re
 
 ---
 
-## 🚀 Como configurar e executar
+## Como configurar e executar
 
 ### Pré-requisitos
 
@@ -161,7 +163,3 @@ app/src/main/java/com/gymapp/
 | Kotlin | 1.9.22 |
 
 ---
-
-## 📄 Licença
-
-Este projeto está sob a licença MIT. Veja o arquivo [LICENSE](LICENSE) para mais detalhes.
