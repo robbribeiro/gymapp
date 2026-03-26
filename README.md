@@ -17,6 +17,15 @@ Aplicativo Android para organizar treinos de academia por semanas e dias, com re
 
 ---
 
+## Telas do Aplicativo
+
+| Organização de Treinos | Catálogo de Exercícios | Cronômetro Integrado |
+| :---: | :---: | :---: |
+| <img src="img/treinos.png" width="250"/> | <img src="img/exercicios.png" width="250"/> | <img src="img/cronometro.png" width="250"/> |
+| Controle suas semanas e dias de treino de forma fácil. Acompanhe seu progresso semanal. | Biblioteca organizada por categorias com histórico detalhado da evolução de cargas. | Timer de descanso prático, com botões de ação e notificações persistentes. |
+
+---
+
 ## Tecnologias
 
 | Camada | Tecnologia |
